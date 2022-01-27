@@ -14,7 +14,7 @@
             <div id="streamURL">
                 <div class="url-input">
                     <label for="sURL">Stream URL:</label>
-                    <input id="sURL" type="text" value="http://127.0.0.1/flv/7182741-1.flv" />
+                    <input id="sURL" type="text" value="http://flv.bdplay.nodemedia.cn/live/bbb.flv" />
                     <button onclick="switch_mds()">Switch to MediaDataSource</button>
                 </div>
                 <div class="options">
@@ -102,6 +102,9 @@
                 lazyLoadMaxDuration: 3 * 60,
                 seekType: 'range',
                 liveBufferLatencyChasing: document.getElementById('liveBufferLatencyChasing').checked,
+            });
+            player.on('statistics_info', (data) =>{
+                // console.log('statistics_info:', data);
             });
             player.attachMediaElement(element);
             player.load();

@@ -65,6 +65,7 @@ class MP4Remuxer {
         this._mp3UseMpegAudio = !Browser.firefox;
 
         this._fillAudioTimestampGap = this._config.fixAudioTimestampGap;
+        console.log('MP4Remuxer:', this._config)
     }
 
     destroy() {
@@ -130,6 +131,8 @@ class MP4Remuxer {
     }
 
     remux(audioTrack, videoTrack) {
+        // console.log('remux audioTrack:', audioTrack)
+        // console.log('remux videoTrack:', videoTrack)
         if (!this._onMediaSegment) {
             throw new IllegalStateException('MP4Remuxer: onMediaSegment callback must be specificed!');
         }
@@ -151,6 +154,7 @@ class MP4Remuxer {
         let codec = metadata.codec;
 
         if (type === 'audio') {
+            return;
             this._audioMeta = metadata;
             if (metadata.codec === 'mp3' && this._mp3UseMpegAudio) {
                 // 'audio/mpeg' for MP3 audio track
@@ -162,7 +166,9 @@ class MP4Remuxer {
                 metabox = MP4.generateInitSegment(metadata);
             }
         } else if (type === 'video') {
+            // debugger
             this._videoMeta = metadata;
+            console.log('_onTrackMetadataReceived metadata:', metadata);
             metabox = MP4.generateInitSegment(metadata);
         } else {
             return;
@@ -245,7 +251,7 @@ class MP4Remuxer {
         if (this._audioMeta == null) {
             return;
         }
-
+        // debugger
         let track = audioTrack;
         let samples = track.samples;
         let dtsCorrection = undefined;
@@ -336,6 +342,7 @@ class MP4Remuxer {
             // align audio segment beginDts to match with current video segment's beginDts
             let firstSampleDts = firstSampleOriginalDts - dtsCorrection;
             let videoSegment = this._videoSegmentInfoList.getLastSegmentBefore(firstSampleOriginalDts);
+            console.log('videoSegment:', videoSegment)
             if (videoSegment != null && videoSegment.beginDts < firstSampleDts) {
                 let silentUnit = AAC.getSilentFrame(this._audioMeta.originalCodec, this._audioMeta.channelCount);
                 if (silentUnit) {
@@ -574,13 +581,15 @@ class MP4Remuxer {
         if (this._videoMeta == null) {
             return;
         }
-
+        // debugger
+        // console.log('videoTrack:', videoTrack)
         let track = videoTrack;
         let samples = track.samples;
         let dtsCorrection = undefined;
         let firstDts = -1, lastDts = -1;
         let firstPts = -1, lastPts = -1;
-
+        
+        // console.log('_remuxVideo samples:', samples);
         if (!samples || samples.length === 0) {
             return;
         }
@@ -705,7 +714,7 @@ class MP4Remuxer {
         mdatbox[2] = (mdatBytes >>>  8) & 0xFF;
         mdatbox[3] = (mdatBytes) & 0xFF;
         mdatbox.set(MP4.types.mdat, 4);
-
+        
         // Write samples into mdatbox
         for (let i = 0; i < mp4Samples.length; i++) {
             let units = mp4Samples[i].units;
@@ -743,6 +752,7 @@ class MP4Remuxer {
             this._videoSegmentInfoList.append(info);
         }
 
+        // console.log('mp4Samples:', mp4Samples)
         track.samples = mp4Samples;
         track.sequenceNumber++;
 
@@ -757,7 +767,8 @@ class MP4Remuxer {
         let moofbox = MP4.moof(track, firstDts);
         track.samples = [];
         track.length = 0;
-
+        // debugger
+        // console.log('mdatbox:', mdatbox)
         this._onMediaSegment('video', {
             type: 'video',
             data: this._mergeBoxes(moofbox, mdatbox).buffer,

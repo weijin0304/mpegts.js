@@ -108,6 +108,11 @@ class MSEController {
         this._mediaElement = mediaElement;
         this._mediaSourceObjectURL = window.URL.createObjectURL(this._mediaSource);
         mediaElement.src = this._mediaSourceObjectURL;
+        // this._mediaElement.play().then(() => {
+        //     console.log('play 成功');
+        // }).catch((error) => {
+        //     console.error('mediaElement.play:', error);
+        // });
     }
 
     detachMediaElement() {
@@ -190,6 +195,7 @@ class MSEController {
             if (!this._mimeTypes[is.type]) {  // empty, first chance create sourcebuffer
                 firstInitSegment = true;
                 try {
+                    console.log('addSourceBuffer is.type:', is.type, 'mimeType:', mimeType);
                     let sb = this._sourceBuffers[is.type] = this._mediaSource.addSourceBuffer(mimeType);
                     sb.addEventListener('error', this.e.onSourceBufferError);
                     sb.addEventListener('updateend', this.e.onSourceBufferUpdateEnd);
@@ -224,6 +230,8 @@ class MSEController {
 
     appendMediaSegment(mediaSegment) {
         let ms = mediaSegment;
+        // debugger
+        // console.log('mediaSegment:', mediaSegment);
         this._pendingSegments[ms.type].push(ms);
 
         if (this._config.autoCleanupSourceBuffer && this._needCleanupSourceBuffer()) {
@@ -442,6 +450,7 @@ class MSEController {
                 }
 
                 try {
+                    // console.log('segment type:', type, segment.data)
                     this._sourceBuffers[type].appendBuffer(segment.data);
                     this._isBufferFull = false;
                     if (type === 'video' && segment.hasOwnProperty('info')) {
@@ -526,6 +535,11 @@ class MSEController {
         } else if (this._hasPendingEos) {
             this.endOfStream();
         }
+        // this._mediaElement.play().then(() => {
+        //     console.log('play 成功');
+        // }).catch((error) => {
+        //     console.error('mediaElement.play:', error);
+        // });
         this._emitter.emit(MSEEvents.UPDATE_END);
     }
 

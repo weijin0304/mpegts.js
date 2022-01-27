@@ -126,7 +126,7 @@ class TransmuxingController {
     _loadSegment(segmentIndex, optionalFrom) {
         this._currentSegmentIndex = segmentIndex;
         let dataSource = this._mediaDataSource.segments[segmentIndex];
-
+        // debugger
         let ioctl = this._ioctl = new IOController(dataSource, this._config, segmentIndex);
         ioctl.onError = this._onIOException.bind(this);
         ioctl.onSeeked = this._onIOSeeked.bind(this);
@@ -238,12 +238,14 @@ class TransmuxingController {
         let consumed = 0;
 
         if (byteStart > 0) {
+            console.log(1);
             // IOController seeked immediately after opened, byteStart > 0 callback may received
             this._demuxer.bindDataSource(this._ioctl);
             this._demuxer.timestampBase = this._mediaDataSource.segments[this._currentSegmentIndex].timestampBase;
 
             consumed = this._demuxer.parseChunks(data, byteStart);
         } else if ((probeData = TSDemuxer.probe(data)).match) {
+            console.log(22222);
             let demuxer = this._demuxer = new TSDemuxer(probeData, this._config);
 
             if (!this._remuxer) {
@@ -265,6 +267,7 @@ class TransmuxingController {
 
             consumed = this._demuxer.parseChunks(data, byteStart);
         } else if ((probeData = FLVDemuxer.probe(data)).match) {
+            console.log(33333333333);
             // Always create new FLVDemuxer
             this._demuxer = new FLVDemuxer(probeData, this._config);
 
@@ -290,15 +293,14 @@ class TransmuxingController {
             this._demuxer.onMetaDataArrived = this._onMetaDataArrived.bind(this);
             this._demuxer.onScriptDataArrived = this._onScriptDataArrived.bind(this);
 
-            this._remuxer.bindDataSource(this._demuxer
-                         .bindDataSource(this._ioctl
-            ));
+            this._remuxer.bindDataSource(this._demuxer.bindDataSource(this._ioctl));
 
             this._remuxer.onInitSegment = this._onRemuxerInitSegmentArrival.bind(this);
             this._remuxer.onMediaSegment = this._onRemuxerMediaSegmentArrival.bind(this);
 
             consumed = this._demuxer.parseChunks(data, byteStart);
         } else {
+            console.log(4444444444);
             probeData = null;
             Log.e(this.TAG, 'Non MPEG-TS/FLV, Unsupported media type!');
             Promise.resolve().then(() => {

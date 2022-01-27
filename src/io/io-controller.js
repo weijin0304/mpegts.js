@@ -43,7 +43,7 @@ class IOController {
 
     constructor(dataSource, config, extraData) {
         this.TAG = 'IOController';
-
+        console.log('IOController config:', config, 'dataSource:', dataSource);
         this._config = config;
         this._extraData = extraData;
 
@@ -435,6 +435,7 @@ class IOController {
 
     _dispatchChunks(chunks, byteStart) {
         this._currentRange.to = byteStart + chunks.byteLength - 1;
+        // console.error('io-controller _dispatchChunks:', chunks.byteLength);
         return this._onDataArrival(chunks, byteStart);
     }
 
@@ -453,6 +454,7 @@ class IOController {
     }
 
     _onLoaderChunkArrival(chunk, byteStart, receivedLength) {
+        // console.log('IOController, 收到数据:', chunk, byteStart)
         if (!this._onDataArrival) {
             throw new IllegalStateException('IOController: No existing consumer (onDataArrival) callback!');
         }
@@ -478,8 +480,8 @@ class IOController {
                 this._adjustStashSize(normalized);
             }
         }
-
         if (!this._enableStash) {  // disable stash
+            console.log('this._stashUsed:', this._stashUsed)
             if (this._stashUsed === 0) {
                 // dispatch chunk directly to consumer;
                 // check ret value (consumed bytes) and stash unconsumed to stashBuffer
@@ -527,6 +529,7 @@ class IOController {
                     // then append chunk to stashBuffer (stash)
                     let buffer = this._stashBuffer.slice(0, this._stashUsed);
                     let consumed = this._dispatchChunks(buffer, this._stashByteStart);
+                    // console.log('consumed:', consumed,'_stashUsed:', this._stashUsed, '_stashByteStart:', this._stashByteStart)
                     if (consumed < buffer.byteLength) {
                         if (consumed > 0) {
                             let remainArray = new Uint8Array(buffer, consumed);

@@ -216,6 +216,7 @@ class MSEPlayer {
             this._msectl.appendInitSegment(is);
         });
         this._transmuxer.on(TransmuxingEvents.MEDIA_SEGMENT, (type, ms) => {
+            // console.log('load on MEDIA_SEGMENT ms:', ms);
             this._msectl.appendMediaSegment(ms);
 
             // lazyLoad check

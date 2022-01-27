@@ -43,14 +43,17 @@ class SpeedSampler {
 
     addBytes(bytes) {
         if (this._firstCheckpoint === 0) {
+            // console.log('addBytes 1')
             this._firstCheckpoint = this._now();
             this._lastCheckpoint = this._firstCheckpoint;
             this._intervalBytes += bytes;
             this._totalBytes += bytes;
         } else if (this._now() - this._lastCheckpoint < 1000) {
+            // console.log('addBytes 2')
             this._intervalBytes += bytes;
             this._totalBytes += bytes;
         } else {  // duration >= 1000
+            // console.log('addBytes 3333333')
             this._lastSecondBytes = this._intervalBytes;
             this._intervalBytes = bytes;
             this._totalBytes += bytes;

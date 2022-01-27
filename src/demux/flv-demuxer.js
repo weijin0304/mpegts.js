@@ -133,7 +133,7 @@ class FLVDemuxer {
     static probe(buffer) {
         let data = new Uint8Array(buffer);
         let mismatch = {match: false};
-
+        // console.log('probe data:', data)
         if (data[0] !== 0x46 || data[1] !== 0x4C || data[2] !== 0x56 || data[3] !== 0x01) {
             return mismatch;
         }
@@ -269,7 +269,7 @@ class FLVDemuxer {
         if (!this._onError || !this._onMediaInfo || !this._onTrackMetadata || !this._onDataAvailable) {
             throw new IllegalStateException('Flv: onError & onMediaInfo & onTrackMetadata & onDataAvailable callback must be specified');
         }
-
+        // console.log('parseChunks, chunk:', chunk, 'byteStart:', byteStart)
         let offset = 0;
         let le = this._littleEndian;
 
@@ -295,7 +295,8 @@ class FLVDemuxer {
             }
             offset += 4;
         }
-
+        // let test = new DataView(chunk, offset);
+        // console.log('test.getUint8(0)', test.getUint8(0));
         while (offset < chunk.byteLength) {
             this._dispatch = true;
 
@@ -306,8 +307,11 @@ class FLVDemuxer {
                 break;
             }
 
+            // Type (1字节）表示 Tag 类型，包括音頻 （Oxo8），视频(ox09）和script data (ox12)，其他类型值被保留
             let tagType = v.getUint8(0);
-            let dataSize = v.getUint32(0, !le) & 0x00FFFFFF;
+            // console.log('parseChunks tagType:', tagType);
+            // Datasize（3 字节）表示该 Tag Ddata 部分的大小
+            let dataSize = v.getUint32(0, !le) & 0x00FFFFFF; // & 0x00ffffff作用是只取后三个字节的值
 
             if (offset + 11 + dataSize + 4 > chunk.byteLength) {
                 // data not enough for parsing actual data body
@@ -320,19 +324,23 @@ class FLVDemuxer {
                 offset += 11 + dataSize + 4;
                 continue;
             }
-
+            
+            // Timestamp（3 字节） 表示该tag的时间戳
             let ts2 = v.getUint8(4);
             let ts1 = v.getUint8(5);
             let ts0 = v.getUint8(6);
+            // Timestamp ex (1字节）表示时间戳的扩展字节，当 24 位数值不够时，该字节为最高位将时间戳扩展为 32 位数值
             let ts3 = v.getUint8(7);
 
+            // 时间戳一共4字节
             let timestamp = ts0 | (ts1 << 8) | (ts2 << 16) | (ts3 << 24);
 
+            // Stream1D（3 字节）
             let streamId = v.getUint32(7, !le) & 0x00FFFFFF;
             if (streamId !== 0) {
                 Log.w(this.TAG, 'Meet tag which has StreamID != 0!');
             }
-
+            // Tag Header：Type (1字节）+Datasize（3字节）+Time（4字节）+Stream1D（3字节） 一共 11 字节
             let dataOffset = offset + 11;
 
             switch (tagType) {
@@ -834,8 +842,29 @@ class FLVDemuxer {
 
         let spec = (new Uint8Array(arrayBuffer, dataOffset, dataSize))[0];
 
-        let frameType = (spec & 240) >>> 4;
-        let codecId = spec & 15;
+
+        // -----------------------------------------------------------------------------------
+        // |                    视频参数(8bit)                 |            视频数据           |
+        // -----------------------------------------------------------------------------------
+        // |     标识帧类型(4bit)     |    标识视频编码(4bit)     |             数据             |
+        // ------------------------------------------------------------------------------------
+        // 前4位标识帧类型。
+        // 1：keyframe (for AVC, a seekable frame)；
+        // 2：inter frame (for AVC, a nonseekable frame)；
+        // 3：disposable inter frame (H.263 only)；
+        // 4：generated keyframe (reserved for server use only)；
+        // 5：video info/command frame
+        // 后4位标识视频编码。
+        // 1：JPEG (currently unused) ；
+        // 2：Sorenson H.263；
+        // 3：Screen video；
+        // 4：On2 VP6；
+        // 5：On2 VP6 with alpha channel；
+        // 6：Screen video version 2；
+        // 7：AVC
+
+        let frameType = (spec & 240) >>> 4; // 标识帧类型
+        let codecId = spec & 15; // 标识视频编码
 
         if (codecId !== 7) {
             this._onError(DemuxErrors.CODEC_UNSUPPORTED, `Flv: Unsupported codec in video frame: ${codecId}`);
@@ -853,11 +882,23 @@ class FLVDemuxer {
 
         let le = this._littleEndian;
         let v = new DataView(arrayBuffer, dataOffset, dataSize);
-
+        const testBuufer = arrayBuffer.slice(dataOffset);
+        // console.log('_parseAVCVideoPacket,dataOffset:', dataOffset, 'arrayBuffer:', arrayBuffer, v, testBuufer)
+        // debugger
+        // AVCPacketType：1个字节。
+        // 0x00：AVCSequence Header，序列头。
+        // 0x01：AVC NALU
+        // 0x02：AVC end ofsequence，序列结束。
         let packetType = v.getUint8(0);
         let cts_unsigned = v.getUint32(0, !le) & 0x00FFFFFF;
+        /* CTS(CompostionTimes)：~SI24，有符号24位整数~。
+        如果AVCPacketType为AVC NALU， 为相对时间戳；否则为0。
+        解释：在Tag Header里拿到过一个 timestamp，这个在视频里对应于DTS(decoder timestamps)，
+            就是解码时间戳，而CTS实际上是一个offset，表示 PTS相对于DTS的偏移量，就是 PTS和DTS的差值。
+            当带有B帧的Nalus流封装后，再次解码显示，此时PTS 和 DTS 不能一一对应，
+            因为B帧的时间戳小于P帧，此时CTS 可以记录这个偏差，用以回复解码的时间戳。 */
         let cts = (cts_unsigned << 8) >> 8;  // convert to 24-bit signed int
-
+        // console.log('_parseAVCVideoPacket, packetType:', packetType, 'cts_unsigned:', cts_unsigned, 'cts:', cts)
         if (packetType === 0) {  // AVCDecoderConfigurationRecord
             this._parseAVCDecoderConfigurationRecord(arrayBuffer, dataOffset + 4, dataSize - 4);
         } else if (packetType === 1) {  // One or more Nalus
@@ -1035,20 +1076,22 @@ class FLVDemuxer {
         }
         // notify new metadata
         this._dispatch = false;
+        console.log('meta:', meta);
         this._onTrackMetadata('video', meta);
     }
 
     _parseAVCVideoData(arrayBuffer, dataOffset, dataSize, tagTimestamp, tagPosition, frameType, cts) {
         let le = this._littleEndian;
         let v = new DataView(arrayBuffer, dataOffset, dataSize);
-
+        // console.log(arrayBuffer, arrayBuffer.Uint8Array);
         let units = [], length = 0;
 
         let offset = 0;
         const lengthSize = this._naluLengthSize;
+        console.log('_parseAVCVideoData frameType:', frameType);
         let dts = this._timestampBase + tagTimestamp;
         let keyframe = (frameType === 1);  // from FLV Frame Type constants
-
+        // debugger
         while (offset < dataSize) {
             if (offset + 4 >= dataSize) {
                 Log.w(this.TAG, `Malformed Nalu near timestamp ${dts}, offset = ${offset}, dataSize = ${dataSize}`);
@@ -1056,28 +1099,31 @@ class FLVDemuxer {
             }
             // Nalu with length-header (AVC1)
             let naluSize = v.getUint32(offset, !le);  // Big-Endian read
+
             if (lengthSize === 3) {
                 naluSize >>>= 8;
             }
+            // console.log('naluSize:', naluSize)
             if (naluSize > dataSize - lengthSize) {
                 Log.w(this.TAG, `Malformed Nalus near timestamp ${dts}, NaluSize > DataSize!`);
                 return;
             }
 
             let unitType = v.getUint8(offset + lengthSize) & 0x1F;
-
+            console.log('_parseAVCVideoData unitType:', unitType);
             if (unitType === 5) {  // IDR
                 keyframe = true;
             }
 
             let data = new Uint8Array(arrayBuffer, dataOffset + offset, lengthSize + naluSize);
             let unit = {type: unitType, data: data};
+            // console.log('type:', unitType,'unit:', unit)
             units.push(unit);
             length += data.byteLength;
 
             offset += lengthSize + naluSize;
         }
-
+        // console.log('units:', units)
         if (units.length) {
             let track = this._videoTrack;
             let avcSample = {
